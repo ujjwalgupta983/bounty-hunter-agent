@@ -153,9 +153,12 @@ BOUNTY_HUNTER = {
     # GitHub
     "GITHUB_TOKEN": env("GITHUB_TOKEN", default=""),
     "GITHUB_USERNAME": env("GITHUB_USERNAME", default=""),
-    # AI
+    # AI — provider selection
+    "AI_PROVIDER": env("ANALYST_AI_PROVIDER", default="anthropic"),  # anthropic | openai | openrouter
+    "AI_MODEL": env("ANALYST_AI_MODEL", default=""),                 # blank = use provider default
     "ANTHROPIC_API_KEY": env("ANTHROPIC_API_KEY", default=""),
     "OPENAI_API_KEY": env("OPENAI_API_KEY", default=""),
+    "OPENROUTER_API_KEY": env("OPENROUTER_API_KEY", default=""),
     "CODING_AGENT": env("SOLVER_CODING_AGENT", default="claude"),
     # Scout
     "MIN_BOUNTY_USD": env.int("SCOUT_MIN_BOUNTY_USD", default=50),

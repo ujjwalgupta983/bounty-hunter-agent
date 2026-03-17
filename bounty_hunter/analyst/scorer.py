@@ -244,12 +244,9 @@ class BountyAnalyst:
 
     def _analyze_with_ai(self, bounty: Bounty) -> dict:
         """Use AI to analyze the bounty issue and estimate difficulty."""
-        try:
-            import anthropic
+        from bounty_hunter.utils.ai_client import analyze_bounty
 
-            client = anthropic.Anthropic(api_key=self.config["ANTHROPIC_API_KEY"])
-
-            prompt = f"""Analyze this GitHub bounty issue and provide an assessment.
+        prompt = f"""Analyze this GitHub bounty issue and provide an assessment.
 
 Title: {bounty.title}
 Repository: {bounty.repo_owner}/{bounty.repo_name}
@@ -274,35 +271,10 @@ Respond in JSON format:
     "risks": ["risk1", "risk2"]
 }}"""
 
-            response = client.messages.create(
-                model="claude-sonnet-4-20250514",
-                max_tokens=1000,
-                messages=[{"role": "user", "content": prompt}],
-            )
-
-            import json
-            text = response.content[0].text
-
-            # Extract JSON from response
-            json_match = text
-            if "```json" in text:
-                json_match = text.split("```json")[1].split("```")[0]
-            elif "```" in text:
-                json_match = text.split("```")[1].split("```")[0]
-
-            return json.loads(json_match.strip())
-
-        except Exception as e:
-            logger.warning(f"AI analysis failed, using defaults: {e}")
-            return {
-                "summary": "AI analysis unavailable",
-                "approach": "",
-                "estimated_hours": 4.0,
-                "difficulty_score": 50,
-                "has_clear_requirements": True,
-                "has_tests": False,
-                "has_ci": False,
-                "has_contribution_guide": False,
-                "required_skills": [],
-                "risks": ["AI analysis failed — manual review recommended"],
-            }
+        logger.info(
+            "analyst: calling AI provider=%s model=%s for bounty %d",
+            self.config.get("AI_PROVIDER", "anthropic"),
+            self.config.get("AI_MODEL", "default"),
+            bounty.id,
+        )
+        return analyze_bounty(prompt, self.config)
