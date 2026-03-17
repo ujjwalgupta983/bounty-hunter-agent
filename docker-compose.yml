@@ -1,0 +1,119 @@
+version: "3.9"
+
+services:
+  # ── Infrastructure ────────────────────────────────────────────────────────────
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: bounty_hunter
+      POSTGRES_USER: bounty_hunter
+      POSTGRES_PASSWORD: bounty_hunter
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bounty_hunter"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Django Web Server ─────────────────────────────────────────────────────────
+
+  web:
+    build: .
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py collectstatic --noinput &&
+             gunicorn bounty_hunter.wsgi:application
+               --bind 0.0.0.0:8000
+               --workers 3
+               --timeout 120"
+    env_file:
+      - config/.env
+    environment:
+      DATABASE_URL: postgres://bounty_hunter:bounty_hunter@postgres:5432/bounty_hunter
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      - .:/app
+      - static_files:/app/staticfiles
+
+  # ── Celery Worker ─────────────────────────────────────────────────────────────
+
+  worker:
+    build: .
+    command: celery -A bounty_hunter worker -l info --concurrency 4
+    env_file:
+      - config/.env
+    environment:
+      DATABASE_URL: postgres://bounty_hunter:bounty_hunter@postgres:5432/bounty_hunter
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      - .:/app
+      - ./data:/app/data
+
+  # ── Celery Beat Scheduler ─────────────────────────────────────────────────────
+
+  beat:
+    build: .
+    command: celery -A bounty_hunter beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    env_file:
+      - config/.env
+    environment:
+      DATABASE_URL: postgres://bounty_hunter:bounty_hunter@postgres:5432/bounty_hunter
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      - .:/app
+
+  # ── Flower (Celery monitoring) ─────────────────────────────────────────────────
+
+  flower:
+    build: .
+    command: celery -A bounty_hunter flower --port=5555
+    env_file:
+      - config/.env
+    environment:
+      DATABASE_URL: postgres://bounty_hunter:bounty_hunter@postgres:5432/bounty_hunter
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "5555:5555"
+    depends_on:
+      - redis
+      - worker
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  static_files:

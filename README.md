@@ -78,49 +78,65 @@ This starts:
 - Celery Beat (scheduler)
 - PostgreSQL database
 - Redis (message broker)
-- n8n (workflow engine, port 5678)
+- Flower (Celery monitoring, port 5555)
 
 ### 3. Run Locally (Development)
 
+Uses **SQLite** by default — no Postgres or Redis required to get started.
+
 ```bash
-python -m venv venv
+python3.11 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 
-# Run migrations
+# Set DATABASE_URL=sqlite:///db.sqlite3 in config/.env (default for local dev)
 python manage.py migrate
-
-# Create superuser
 python manage.py createsuperuser
 
 # Start Django
 python manage.py runserver
 
-# Start Celery worker (separate terminal)
+# Start Celery worker (separate terminal — requires Redis)
 celery -A bounty_hunter worker -l info
 
-# Start Celery Beat (separate terminal)
+# Start Celery Beat (separate terminal — requires Redis)
 celery -A bounty_hunter beat -l info
 ```
 
 ### 4. Run a Scout Scan
 
 ```bash
-# Via management command
+# Via management command (runs synchronously, no Celery needed)
 python manage.py scout_scan
+python manage.py scout_scan --platform github     # single platform
+python manage.py scout_scan --platform algora
+python manage.py scout_scan --no-evaluate         # skip analyst scoring
 
-# Via API
+# Via API (triggers async Celery task)
 curl -X POST http://localhost:8000/api/v1/scout/scan/
 
-# Via Celery task
+# Via Celery task directly
 python manage.py shell -c "from bounty_hunter.scouts.tasks import run_full_scan; run_full_scan.delay()"
 ```
 
-## 📊 Dashboard
+### 5. View Reports
 
-Access the admin dashboard at `http://localhost:8000/admin/`
+```bash
+python manage.py bounty_report            # last 30 days
+python manage.py bounty_report --days 7   # last 7 days
+python manage.py bounty_report --days 0   # all time
+```
 
-API documentation at `http://localhost:8000/api/docs/`
+## 📊 Dashboard & Admin
+
+| URL | What it is |
+|---|---|
+| `http://localhost:8000/admin/` | Django Admin — browse Bounties, Evaluations, Submissions, Earnings |
+| `http://localhost:8000/api/docs/` | Swagger UI — interactive API docs |
+| `http://localhost:8000/api/v1/dashboard/` | JSON stats: totals, win rate, earnings |
+| `http://localhost:8000/api/v1/bounties/top_opportunities/` | Top N bounties by ROI score |
+| `http://localhost:8000/api/v1/bounties/active/` | Bounties currently in progress |
+| `http://localhost:5555/` | Flower — Celery task monitoring (Docker only) |
 
 ## 🔧 Configuration
 
@@ -191,6 +207,34 @@ Effective Rate:      $74/hr
 - **Style compliance** — follows each repo's contribution guidelines
 - **Rate limiting** — natural pacing to avoid platform bans
 - **Reputation tracking** — stops submitting to repos with high rejection rates
+
+## 🏗️ Project Status
+
+### ✅ Built
+- Django project + all data models (`Bounty`, `Evaluation`, `Solution`, `Submission`, `Earning`, `ScanLog`)
+- GitHub Scout + Algora Scout (API + scraping fallback)
+- Analyst/Scorer — AI difficulty estimation + ROI calculation via Claude
+- Picker — target selection by ROI within capacity limits
+- REST API — CRUD, dashboard stats, top opportunities, active bounties
+- Django Admin — full model registration with list views, filters, search
+- Celery configuration with Beat schedule (scout every 6h, tracker hourly, analyst daily)
+- `scout_scan` management command — run scans without Celery
+- `bounty_report` management command — P&L summary report
+- Tracker stub — `check_all_prs` polls GitHub PR state, updates submission/bounty status
+- Docker Compose — postgres, redis, web, worker, beat, flower
+- Dockerfile
+
+### 🚧 In Progress
+- Solver swarm pipeline (Issue #2)
+- Submitter agent (Issue #3)
+- Full Tracker agent with review response (Issue #4)
+
+### 📋 Planned
+- More scouts: Opire, Gitcoin, Immunefi (Issue #1)
+- Dashboard UI (Issue #6)
+- Telegram notifications (Issue #7)
+- Test suite (Issue #8)
+- Safety guardrails (Issue #11)
 
 ## 🤝 Contributing
 

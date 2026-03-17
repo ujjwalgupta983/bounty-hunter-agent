@@ -34,7 +34,9 @@ INSTALLED_APPS = [
     "django_celery_results",
     "drf_spectacular",
     # Local apps
+    "bounty_hunter",
     "bounty_hunter.models",
+    "bounty_hunter.scouts",
 ]
 
 MIDDLEWARE = [
