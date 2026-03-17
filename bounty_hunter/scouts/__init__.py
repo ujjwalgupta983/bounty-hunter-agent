@@ -1,0 +1,1 @@
+# Scout agents - bounty discovery
