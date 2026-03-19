@@ -4,14 +4,22 @@
     {
       "parameters": {
         "rule": {
-          "interval": [{"field": "hours", "hoursInterval": 1}]
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
         }
       },
       "id": "schedule-trigger",
       "name": "Schedule Trigger",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.1,
-      "position": [240, 300]
+      "position": [
+        240,
+        300
+      ]
     },
     {
       "parameters": {
@@ -22,7 +30,10 @@
       "name": "Get Top Opportunities",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [460, 300]
+      "position": [
+        460,
+        300
+      ]
     },
     {
       "parameters": {
@@ -32,18 +43,28 @@
       "name": "Filter High Value",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [680, 300]
+      "position": [
+        680,
+        300
+      ]
     },
     {
       "parameters": {
         "conditions": {
-          "options": {"caseSensitive": true, "leftValue": "", "typeValidation": "strict"},
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
           "conditions": [
             {
               "id": "check-has-high-value",
               "leftValue": "={{ $json.hasHighValue }}",
               "rightValue": true,
-              "operator": {"type": "boolean", "operation": "equal"}
+              "operator": {
+                "type": "boolean",
+                "operation": "equal"
+              }
             }
           ],
           "combinator": "and"
@@ -54,57 +75,114 @@
       "name": "IF High Value Found",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [900, 300]
+      "position": [
+        900,
+        300
+      ]
     },
     {
       "parameters": {
-        "jsCode": "const data = $json;\nconst lines = data.bounties.slice(0, 10).map((b, i) => {\n  const amount = b.bounty_amount_usd;\n  const title = (b.title || 'Untitled').slice(0, 60);\n  const platform = b.platform || 'unknown';\n  const url = b.url || '';\n  return `${i+1}. 💵 *$${amount}* — ${title}\\n   🔗 ${url} (${platform})`;\n});\nconst msg = `🚨 *High-Value Bounty Alert!*\\n\\nFound *${data.count}* bounties over $500:\\n\\n${lines.join('\\n\\n')}\\n\\n⚡ Act fast — high-value bounties fill up quickly!`;\nreturn [{ json: { text: msg } }];"
+        "jsCode": "const data = $json;\nconst lines = data.bounties.slice(0, 10).map((b, i) => {\n  const amount = b.bounty_amount_usd;\n  const title = (b.title || 'Untitled').slice(0, 60);\n  const platform = b.platform || 'unknown';\n  const url = b.url || '';\n  return `${i+1}. \ud83d\udcb5 *$${amount}* \u2014 ${title}\\n   \ud83d\udd17 ${url} (${platform})`;\n});\nconst msg = `\ud83d\udea8 *High-Value Bounty Alert!*\\n\\nFound *${data.count}* bounties over $500:\\n\\n${lines.join('\\n\\n')}\\n\\n\u26a1 Act fast \u2014 high-value bounties fill up quickly!`;\nreturn [{ json: { text: msg } }];"
       },
       "id": "format-alert",
       "name": "Format Alert",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1120, 200]
+      "position": [
+        1120,
+        200
+      ]
     },
     {
       "parameters": {
         "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
         "text": "={{ $json.text }}",
-        "additionalFields": {"parse_mode": "Markdown"}
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
       },
       "id": "send-telegram",
       "name": "Send Telegram Alert",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.1,
-      "position": [1340, 200],
-      "credentials": {"telegramApi": {"id": "1", "name": "Telegram Bot"}}
+      "position": [
+        1340,
+        200
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "1",
+          "name": "Telegram Bot"
+        }
+      }
     }
   ],
   "connections": {
     "Schedule Trigger": {
-      "main": [[{"node": "Get Top Opportunities", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Get Top Opportunities",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Get Top Opportunities": {
-      "main": [[{"node": "Filter High Value", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Filter High Value",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Filter High Value": {
-      "main": [[{"node": "IF High Value Found", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "IF High Value Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "IF High Value Found": {
       "main": [
-        [{"node": "Format Alert", "type": "main", "index": 0}],
+        [
+          {
+            "node": "Format Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
         []
       ]
     },
     "Format Alert": {
-      "main": [[{"node": "Send Telegram Alert", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Send Telegram Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "pinData": {},
-  "settings": {"executionOrder": "v1"},
+  "settings": {
+    "executionOrder": "v1"
+  },
   "staticData": null,
-  "tags": ["bounty-hunter", "alert", "high-value"],
+  "tags": [],
   "triggerCount": 0,
   "updatedAt": "2026-03-19T00:00:00.000Z",
-  "versionId": "1"
+  "versionId": "1",
+  "id": "9ee07d94-f549-49c5-b7a3-25dec66d91d0"
 }
