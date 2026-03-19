@@ -12,6 +12,8 @@ def run_full_scan(self):
     """Run all scouts and aggregate results."""
     from bounty_hunter.scouts.github_scout import GitHubScout
     from bounty_hunter.scouts.algora_scout import AlgoraScout
+    from bounty_hunter.scouts.opire_scout import OpireScout
+    from bounty_hunter.scouts.issuehunt_scout import IssueHuntScout
 
     results = {}
 
@@ -33,6 +35,24 @@ def run_full_scan(self):
         logger.error(f"Algora scout failed: {e}")
         results["algora"] = {"error": str(e)}
 
+    # Opire Scout
+    try:
+        opire_scout = OpireScout()
+        results["opire"] = opire_scout.scan()
+        logger.info(f"Opire scan: {results['opire']}")
+    except Exception as e:
+        logger.error(f"Opire scout failed: {e}")
+        results["opire"] = {"error": str(e)}
+
+    # IssueHunt Scout
+    try:
+        issuehunt_scout = IssueHuntScout()
+        results["issuehunt"] = issuehunt_scout.scan()
+        logger.info(f"IssueHunt scan: {results['issuehunt']}")
+    except Exception as e:
+        logger.error(f"IssueHunt scout failed: {e}")
+        results["issuehunt"] = {"error": str(e)}
+
     # Trigger evaluation for new bounties
     from bounty_hunter.analyst.tasks import evaluate_new_bounties
     evaluate_new_bounties.delay()
@@ -52,3 +72,17 @@ def scan_algora():
     """Run Algora scout only."""
     from bounty_hunter.scouts.algora_scout import AlgoraScout
     return AlgoraScout().scan()
+
+
+@shared_task(name="bounty_hunter.scouts.tasks.scan_opire")
+def scan_opire():
+    """Run Opire scout only."""
+    from bounty_hunter.scouts.opire_scout import OpireScout
+    return OpireScout().scan()
+
+
+@shared_task(name="bounty_hunter.scouts.tasks.scan_issuehunt")
+def scan_issuehunt():
+    """Run IssueHunt scout only."""
+    from bounty_hunter.scouts.issuehunt_scout import IssueHuntScout
+    return IssueHuntScout().scan()

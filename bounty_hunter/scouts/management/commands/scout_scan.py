@@ -15,12 +15,16 @@ from django.core.management.base import BaseCommand, CommandError
 
 from bounty_hunter.scouts.github_scout import GitHubScout
 from bounty_hunter.scouts.algora_scout import AlgoraScout
+from bounty_hunter.scouts.opire_scout import OpireScout
+from bounty_hunter.scouts.issuehunt_scout import IssueHuntScout
 from bounty_hunter.analyst.tasks import evaluate_new_bounties
 
 
 SCOUTS = {
     "github": GitHubScout,
     "algora": AlgoraScout,
+    "opire": OpireScout,
+    "issuehunt": IssueHuntScout,
 }
 
 
