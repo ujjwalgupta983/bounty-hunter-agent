@@ -37,6 +37,7 @@ INSTALLED_APPS = [
     "bounty_hunter",
     "bounty_hunter.models",
     "bounty_hunter.scouts",
+    "bounty_hunter.submitter",
 ]
 
 MIDDLEWARE = [
