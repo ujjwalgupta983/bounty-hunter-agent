@@ -19,8 +19,8 @@ Bounty Hunter Agent is an autonomous system that discovers software bounties on 
 │  External Platforms:                             │  Submitter   │  │
 │  - GitHub Issues                                 │  (create PR) │  │
 │  - Algora.io                                     └───────┬──────┘  │
-│  - Opire (planned)                                       │         │
-│  - Gitcoin (planned)                             ┌───────▼──────┐  │
+│  - Opire                                                 │         │
+│  - IssueHunt                                     ┌───────▼──────┐  │
 │                                                  │   Tracker    │  │
 │                                                  │ (monitor PR) │  │
 │                                                  └──────────────┘  │
@@ -44,6 +44,8 @@ The Scout layer scrapes bounty platforms on a periodic Celery Beat schedule. Eac
 **Current implementations:**
 - `github_scout.py` — Searches GitHub Issues API for bounty-labeled issues. Extracts dollar amounts from titles, labels, and issue bodies using regex. Handles pagination and rate limits.
 - `algora_scout.py` — Queries the Algora.io GraphQL API with an httpx web scraping fallback.
+- `opire_scout.py` — Scrapes the Opire REST API (`https://api.opire.dev/v1/rewards`) for open bounties posted on GitHub issues.
+- `issuehunt_scout.py` — Queries IssueHunt REST API with BeautifulSoup scraping fallback. Normalises `fund` and `amount` fields.
 
 **Output:** Creates or updates `Bounty` model records with status `discovered`. Logs scan runs in `ScanLog`.
 
@@ -101,40 +103,47 @@ The Picker selects which evaluated bounties to actually work on, respecting conc
 
 ---
 
-### Solver (WIP)
+### Solver
 
 **Location:** `bounty_hunter/solver/`
 
-The Solver is an AI coding agent swarm that clones the target repository, understands the codebase, implements a fix, and runs the test suite. It self-reviews and iterates up to `SOLVER_MAX_ITERATIONS` times.
+The Solver is an AI coding agent that clones the target repository, understands the codebase, implements a fix, and runs the test suite. It self-reviews and iterates up to `SOLVER_MAX_ITERATIONS` times.
 
-**Planned phases:**
-1. `exploring` — understand repo structure and codebase
-2. `planning` — produce implementation plan
-3. `coding` — implement the fix
-4. `testing` — run existing test suite
-5. `reviewing` — internal quality check
-6. `iterating` — revise if tests fail or review finds issues
-7. `ready` — signal Submitter to create PR
+**Stages:**
+1. `exploring` — understand repo structure and codebase via `git clone` + directory traversal
+2. `planning` — produce a structured implementation plan via AI
+3. `coding` — implement the fix using Claude Code CLI (falls back to AI API)
+4. `testing` — run existing test suite with `pytest`
+5. `reviewing` — AI self-review of the diff
+6. `iterating` — revise if tests fail or review finds issues (up to `SOLVER_MAX_ITERATIONS`)
+7. `ready` — signals Submitter to create PR
+
+**Celery tasks:** `solve_bounty(bounty_id)` and `solve_targeted_bounties()`.
 
 ---
 
-### Submitter (WIP)
+### Submitter
 
 **Location:** `bounty_hunter/submitter/`
 
-The Submitter creates a professional pull request in the target repository using PyGithub or the `gh` CLI. It reads `CONTRIBUTING.md` of the target repo before writing the PR description.
+The Submitter creates a professional pull request in the target repository using the `gh` CLI. It enforces safety guardrails before opening any PR.
 
-**Safety gate:** The first `SUBMITTER_HUMAN_REVIEW_FIRST_N` submissions (default: 20) require human approval before the PR is created.
+**Pipeline:** guardrails check → branch naming → PR body → `gh pr create` → `Submission` record → bounty status → `SUBMITTED`
+
+**Safety gate:** Runs `GuardrailChecker` which enforces: tests must pass, human review required for first `HUMAN_REVIEW_FIRST_N` submissions, rate limit of `SUBMIT_RATE_LIMIT_PER_HOUR` per hour, bounty must not be in terminal status.
 
 ---
 
-### Tracker (WIP)
+### Tracker
 
 **Location:** `bounty_hunter/tracker/`
 
-The Tracker polls open PRs for status changes, responds to code review comments using the AI, and records payments in the `Earning` model once a PR is merged and paid.
+The Tracker polls open PRs for status changes and records payments once bounties are merged and paid.
 
-**Celery task:** `bounty_hunter.tracker.tasks.check_all_prs` — runs every hour.
+**Celery tasks:**
+- `check_all_prs` — polls GitHub API for all open `Submission` PRs, updates `PRStatus`, marks bounties `MERGED`. Runs every hour.
+- `record_earning(submission_id, gross_usd)` — calculates platform fee, creates `Earning` record, marks bounty `PAID`.
+- `ping_stale_prs` — posts a friendly status-check comment on PRs idle > 7 days.
 
 ---
 
@@ -152,11 +161,12 @@ The Tracker polls open PRs for status changes, responds to code review comments 
 
 3. PICKER selects top bounties
    └─▶ Bounty(status=targeted)
-         └─▶ Triggers solve_bounty.delay(bounty.id)  [planned]
+         └─▶ Triggers solve_bounty.delay(bounty.id)
+               └─▶ Also fires notifier.notify_targeted() via Telegram
 
 4. SOLVER works the fix
    └─▶ Solution(status=ready, all_tests_pass=True)
-         └─▶ Triggers submit_solution.delay(solution.id)  [planned]
+         └─▶ Triggers submit_solution.delay(solution.id)
 
 5. SUBMITTER creates PR
    └─▶ Submission(pr_url=..., pr_status=submitted)
@@ -204,10 +214,19 @@ discovered ──▶ evaluated ──▶ targeted ──▶ in_progress ──�
 | Task | Schedule | Description |
 |---|---|---|
 | `scouts.tasks.run_full_scan` | Every N hours (default: 6) | Scrape all platforms, trigger evaluation |
-| `tracker.tasks.check_all_prs` | Every hour | Poll open PR statuses, respond to reviews |
+| `tracker.tasks.check_all_prs` | Every hour | Poll open PR statuses, update `PRStatus`, mark bounties `MERGED` |
+| `tracker.tasks.ping_stale_prs` | Daily | Comment on PRs idle > 7 days |
 | `analyst.tasks.rescore_stale_bounties` | Daily | Re-evaluate bounties whose scores may be stale |
 
-The schedule interval is configurable via `SCOUT_SCAN_INTERVAL_HOURS`.
+The scan interval is configurable via `SCOUT_SCAN_INTERVAL_HOURS`.
+
+**n8n scheduled workflows** (separate from Celery, run in the n8n container):
+
+| Workflow | Schedule | Description |
+|---|---|---|
+| `daily-digest` | Daily at 9am | Telegram digest: stats + top 5 bounties |
+| `high-value-alert` | Every hour | Telegram alert when any bounty > $500 is detected |
+| `pr-merged-payout-tracker` | Webhook | Records earnings when a PR is merged |
 
 ---
 
@@ -216,7 +235,9 @@ The schedule interval is configurable via `SCOUT_SCAN_INTERVAL_HOURS`.
 | Layer | Technology |
 |---|---|
 | Web framework | Django 5.x + Django REST Framework |
+| App server | Gunicorn (production), Django dev server (local) |
 | Task queue | Celery 5.x |
+| Task monitor | Flower (http://localhost:5555) |
 | Message broker | Redis |
 | Result backend | Django DB (via django-celery-results) |
 | Scheduler | Celery Beat (via django-celery-beat) |
@@ -225,6 +246,7 @@ The schedule interval is configurable via `SCOUT_SCAN_INTERVAL_HOURS`.
 | HTTP client | httpx (async-capable, used for scraping) |
 | Git operations | PyGithub + `gh` CLI |
 | API docs | drf-spectacular (OpenAPI/Swagger) |
+| Workflow automation | n8n (http://localhost:5678) |
 
 ---
 
@@ -242,15 +264,22 @@ bounty-hunter-agent/
 │   ├── scouts/                 # Platform scrapers
 │   │   ├── github_scout.py
 │   │   ├── algora_scout.py
-│   │   └── tasks.py            # run_full_scan, scan_github, scan_algora
+│   │   ├── opire_scout.py
+│   │   ├── issuehunt_scout.py
+│   │   └── tasks.py            # run_full_scan, scan_github, scan_algora, scan_opire, scan_issuehunt
 │   ├── analyst/
 │   │   ├── scorer.py           # BountyAnalyst: ROI scoring + AI difficulty
 │   │   └── tasks.py            # evaluate_new_bounties, rescore_stale_bounties
 │   ├── picker/
 │   │   └── tasks.py            # pick_targets
-│   ├── solver/                 # (WIP)
-│   ├── submitter/              # (WIP)
-│   ├── tracker/                # (WIP)
+│   ├── solver/
+│   │   ├── solver.py           # SolverAgent (5-stage pipeline)
+│   │   └── tasks.py            # solve_bounty, solve_targeted_bounties
+│   ├── submitter/
+│   │   ├── submitter.py        # SubmitterAgent (gh CLI PR creation)
+│   │   └── tasks.py            # submit_ready_solutions, submit_solution
+│   ├── tracker/
+│   │   └── tasks.py            # check_all_prs, record_earning, ping_stale_prs
 │   ├── api/
 │   │   ├── urls.py
 │   │   ├── views.py            # ViewSets + DashboardView

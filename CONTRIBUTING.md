@@ -9,10 +9,37 @@ Thank you for your interest in contributing! This document covers everything you
 ### Prerequisites
 
 - Python 3.11+
-- Redis (for Celery)
+- Redis (for Celery) **or** Docker + Docker Compose
 - Git
 
-### Local Setup
+### Option A — Docker Compose (recommended)
+
+The easiest way to run the full stack (Django, Celery worker, Celery Beat, Flower, PostgreSQL, Redis):
+
+```bash
+# 1. Clone and configure
+git clone https://github.com/ujjwalgupta983/bounty-hunter-agent.git
+cd bounty-hunter-agent
+cp config/.env.example config/.env
+# Edit config/.env with your GITHUB_TOKEN, ANTHROPIC_API_KEY, etc.
+
+# 2. Start the full stack
+docker compose up -d
+
+# 3. (Optional) Start n8n workflow automation
+docker compose -f n8n/docker-compose.yml up -d
+# Import workflows into n8n:
+docker exec n8n-n8n-1 n8n import:workflow --input=/workflows/daily-digest.json
+docker exec n8n-n8n-1 n8n import:workflow --input=/workflows/pr-merged-payout-tracker.json
+docker exec n8n-n8n-1 n8n import:workflow --input=/workflows/high-value-alert.json
+```
+
+Services after `docker compose up -d`:
+- Django API: http://localhost:8000
+- Flower (Celery monitor): http://localhost:5555
+- n8n (if started): http://localhost:5678
+
+### Option B — Local Python Setup
 
 ```bash
 # 1. Clone the repository
@@ -44,7 +71,7 @@ redis-server &
 python manage.py check
 ```
 
-### Running the Application
+### Running the Application (Option B)
 
 ```bash
 # Django development server
@@ -283,15 +310,17 @@ test: add picker capacity limit test
 ```
 bounty_hunter/
 ├── models/models.py       — All data models (Bounty, Evaluation, Solution, Submission, Earning)
-├── scouts/                — Platform scrapers
+├── scouts/                — Platform scrapers (GitHub, Algora, Opire, IssueHunt)
 ├── analyst/scorer.py      — ROI scoring + AI difficulty estimation
 ├── picker/tasks.py        — Target selection
-├── solver/                — AI coding agent (WIP)
-├── submitter/             — PR creation (WIP)
-├── tracker/               — PR monitoring (WIP)
+├── solver/solver.py       — AI coding agent (5-stage pipeline)
+├── submitter/submitter.py — PR creation with safety guardrails
+├── tracker/tasks.py       — PR monitoring + payment tracking
 ├── api/                   — REST API (ViewSets, serializers, routes)
-└── utils/ai_client.py     — Multi-provider AI client
+└── utils/                 — ai_client.py (multi-provider AI), guardrails.py (safety checks)
 ```
+
+For n8n workflows and automation, see [n8n/README.md](n8n/README.md).
 
 For architecture details, see [docs/architecture.md](docs/architecture.md).
 

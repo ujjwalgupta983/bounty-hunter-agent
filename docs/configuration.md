@@ -170,6 +170,42 @@ Lower `ANALYST_MIN_ROI_SCORE` means more bounties get picked (higher quantity, l
 
 ---
 
+### n8n Workflow Automation
+
+n8n is the workflow engine that sends Telegram notifications (daily digest, high-value alerts, PR payout tracking). It runs as a separate Docker Compose service.
+
+| Variable | Type | Default | Required | Description |
+|---|---|---|---|---|
+| `N8N_ENCRYPTION_KEY` | string | `changeme-in-production` | Yes (prod) | Secret key for encrypting n8n credentials at rest. Change in production. |
+| `TELEGRAM_CHAT_ID` | string | `""` | Yes | Telegram chat/channel ID for n8n to send notifications to. |
+| `N8N_HOST` | string | `localhost` | No | Hostname n8n listens on. |
+| `N8N_PORT` | int | `5678` | No | Port n8n listens on. n8n UI available at `http://localhost:5678`. |
+| `GENERIC_TIMEZONE` | string | `UTC` | No | Timezone for cron-based n8n workflows (e.g. `Asia/Kolkata`, `America/New_York`). |
+
+> These variables are consumed by `n8n/docker-compose.yml`, not the main Django stack. Add them to `config/.env` — the n8n compose file reads from there.
+
+**Starting n8n:**
+
+```bash
+# Start the main stack first (n8n joins its Docker network)
+docker compose up -d
+
+# Then start n8n
+docker compose -f n8n/docker-compose.yml up -d
+```
+
+**Importing workflows after first start:**
+
+```bash
+docker exec n8n-n8n-1 n8n import:workflow --input=/workflows/daily-digest.json
+docker exec n8n-n8n-1 n8n import:workflow --input=/workflows/pr-merged-payout-tracker.json
+docker exec n8n-n8n-1 n8n import:workflow --input=/workflows/high-value-alert.json
+```
+
+See [n8n/README.md](../n8n/README.md) for full setup instructions including Telegram bot creation.
+
+---
+
 ## Environment File Example
 
 ```bash

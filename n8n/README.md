@@ -29,10 +29,21 @@ n8n will be available at [http://localhost:5678](http://localhost:5678).
 
 ### 2. Import Workflows
 
-1. Open [http://localhost:5678](http://localhost:5678) in your browser
-2. Log in or create an account
-3. Go to **Settings → Import Workflow** (or use the **+** button on the Workflows page)
-4. Select each JSON file from `n8n/workflows/` and import
+Use the n8n CLI inside the container — this is the most reliable method:
+
+```bash
+docker exec n8n-n8n-1 n8n import:workflow --input=/workflows/daily-digest.json
+docker exec n8n-n8n-1 n8n import:workflow --input=/workflows/pr-merged-payout-tracker.json
+docker exec n8n-n8n-1 n8n import:workflow --input=/workflows/high-value-alert.json
+```
+
+Verify the imports:
+
+```bash
+docker exec n8n-n8n-1 n8n list:workflow
+```
+
+Alternatively you can import via the UI: open [http://localhost:5678](http://localhost:5678), go to **Workflows → Import from File**, and select each JSON from `n8n/workflows/`.
 
 ### 3. Configure Telegram Credentials
 
