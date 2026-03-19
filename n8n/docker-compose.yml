@@ -13,6 +13,7 @@ services:
       - WEBHOOK_URL=http://localhost:5678/
       - GENERIC_TIMEZONE=Asia/Kolkata
       - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-changeme-in-production}
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
       # Point to Django API via Docker network
       - BOUNTY_API_URL=http://web:8000
     volumes:
