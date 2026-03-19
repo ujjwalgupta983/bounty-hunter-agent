@@ -44,9 +44,12 @@ def pick_targets():
             f"— {bounty.title[:60]}"
         )
 
-        # TODO: Trigger solver for this bounty
-        # from bounty_hunter.solver.tasks import solve_bounty
-        # solve_bounty.delay(bounty.id)
+        # Notify via Telegram
+        try:
+            from bounty_hunter.utils.notifications import notifier
+            notifier.notify_targeted(bounty, bounty.evaluation)
+        except Exception:
+            pass
 
     logger.info(f"Picked {picked} new targets")
     return {"picked": picked}
