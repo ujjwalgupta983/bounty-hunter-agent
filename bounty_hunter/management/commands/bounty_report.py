@@ -7,7 +7,11 @@ Usage:
     python manage.py bounty_report
     python manage.py bounty_report --days 7
     python manage.py bounty_report --days 0   # all time
+    python manage.py bounty_report --json
+    python manage.py bounty_report --days 7 --json
 """
+import json
+
 from django.core.management.base import BaseCommand
 from django.db.models import Sum, Count, Avg, Q
 from django.utils import timezone
@@ -24,11 +28,19 @@ class Command(BaseCommand):
             default=30,
             help="Number of days to include in report (0 = all time, default: 30)",
         )
+        parser.add_argument(
+            "--json",
+            action="store_true",
+            default=False,
+            dest="output_json",
+            help="Output report data as JSON instead of a human-readable table",
+        )
 
     def handle(self, *args, **options):
         from bounty_hunter.models.models import Bounty, Submission, Earning, BountyStatus
 
         days = options["days"]
+        output_json = options["output_json"]
 
         if days > 0:
             since = timezone.now() - datetime.timedelta(days=days)
@@ -86,9 +98,43 @@ class Command(BaseCommand):
             .order_by("-count")
         )
 
-        # Print report
+        # Build data structure (used for both JSON and human output)
+        report_data = {
+            "period": period_label,
+            "days": days,
+            "bounties": {
+                "scraped": total_bounties,
+                "evaluated": total_evaluated,
+                "attempted": total_targeted,
+            },
+            "submissions": {
+                "total": total_submitted,
+                "merged": total_merged,
+                "pending": total_pending,
+                "rejected": total_rejected,
+                "win_rate_pct": round(win_rate, 1),
+            },
+            "earnings": {
+                "confirmed_usd": float(confirmed),
+                "pending_usd": float(pending_earn),
+                "pipeline_usd": float(confirmed + pending_earn),
+                "avg_per_bounty_usd": float(avg_earn) if total_merged > 0 else None,
+                "avg_hours": float(avg_hours) if total_merged > 0 else None,
+                "effective_hourly_rate_usd": float(avg_hourly) if total_merged > 0 else None,
+            },
+            "by_platform": [
+                {"platform": row["platform"], "count": row["count"]}
+                for row in by_platform
+            ],
+        }
+
+        if output_json:
+            self.stdout.write(json.dumps(report_data, indent=2))
+            return
+
+        # Print human-readable report
         sep = "─" * 45
-        self.stdout.write(f"\n{'📊 Bounty Hunter Report':^45}")
+        self.stdout.write(f"\n{'Bounty Hunter Report':^45}")
         self.stdout.write(f"{'(' + period_label + ')':^45}")
         self.stdout.write(sep)
 
