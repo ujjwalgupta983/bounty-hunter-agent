@@ -51,5 +51,8 @@ def pick_targets():
         except Exception:
             pass
 
+        from bounty_hunter.solver.tasks import solve_bounty
+        solve_bounty.delay(bounty.id)
+
     logger.info(f"Picked {picked} new targets")
     return {"picked": picked}
