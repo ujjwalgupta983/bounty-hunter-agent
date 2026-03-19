@@ -80,10 +80,8 @@ class GuardrailChecker:
 
         total_submitted = Submission.objects.count()
         if total_submitted >= self.human_review_first_n:
-            # Past the probationary window — no human approval needed.
             return True, ""
 
-        # Within the probationary window — require explicit human sign-off.
         if "HUMAN_APPROVED" not in (solution.review_notes or ""):
             return (
                 False,
