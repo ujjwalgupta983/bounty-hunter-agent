@@ -44,3 +44,5 @@ pytest-asyncio>=0.23
 factory-boy>=3.3
 httpx  # for async test client
 coverage>=7.4
+gunicorn==21.2.0
+flower==2.0.1
