@@ -1,0 +1,111 @@
+{
+  "name": "PR Merged Payout Tracker",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "pr-merged",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "pr-merged-payout-tracker"
+    },
+    {
+      "parameters": {
+        "jsCode": "const payload = $json.body;\nconst repo = payload.repository?.full_name || payload.repo || '';\nconst prNumber = payload.pull_request?.number || payload.pr_number || null;\nconst mergedAt = payload.pull_request?.merged_at || new Date().toISOString();\nconst bountyAmount = payload.bounty_amount_usd || 0;\nif (!repo || !prNumber) {\n  throw new Error('Missing repo or pr_number in webhook payload');\n}\nreturn [{ json: { repo, prNumber, mergedAt, bountyAmount } }];"
+      },
+      "id": "extract-payload",
+      "name": "Extract PR Info",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:8000/api/v1/earnings/",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {"name": "repo", "value": "={{ $json.repo }}"},
+            {"name": "pr_number", "value": "={{ $json.prNumber }}"},
+            {"name": "merged_at", "value": "={{ $json.mergedAt }}"},
+            {"name": "amount_usd", "value": "={{ $json.bountyAmount }}"}
+          ]
+        },
+        "options": {}
+      },
+      "id": "record-earning",
+      "name": "Record Earning",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const info = $('Extract PR Info').first().json;\nconst earning = $json;\nconst msg = `💰 *PR Merged & Payout Tracked*\\n\\n📦 Repo: \\`${info.repo}\\`\\n🔢 PR: #${info.prNumber}\\n💵 Amount: $${info.bountyAmount || 'TBD'}\\n🕐 Merged: ${info.mergedAt}\\n\\nEarning recorded in tracker ✅`;\nreturn [{ json: { text: msg } }];"
+      },
+      "id": "format-notification",
+      "name": "Format Notification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {"parse_mode": "Markdown"}
+      },
+      "id": "send-telegram",
+      "name": "Send Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [1120, 300],
+      "credentials": {"telegramApi": {"id": "1", "name": "Telegram Bot"}}
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"status\": \"ok\", \"message\": \"Payout recorded\"}",
+        "options": {}
+      },
+      "id": "respond-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1120, 460]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{"node": "Extract PR Info", "type": "main", "index": 0}]]
+    },
+    "Extract PR Info": {
+      "main": [[{"node": "Record Earning", "type": "main", "index": 0}]]
+    },
+    "Record Earning": {
+      "main": [[{"node": "Format Notification", "type": "main", "index": 0}]]
+    },
+    "Format Notification": {
+      "main": [
+        [
+          {"node": "Send Telegram", "type": "main", "index": 0},
+          {"node": "Respond to Webhook", "type": "main", "index": 0}
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {"executionOrder": "v1"},
+  "staticData": null,
+  "tags": ["bounty-hunter", "payout", "webhook"],
+  "triggerCount": 0,
+  "updatedAt": "2026-03-19T00:00:00.000Z",
+  "versionId": "1"
+}

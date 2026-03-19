@@ -1,0 +1,28 @@
+version: "3.8"
+services:
+  n8n:
+    image: n8nio/n8n:latest
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=http://localhost:5678/
+      - GENERIC_TIMEZONE=UTC
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-changeme-in-production}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./workflows:/home/node/.n8n/workflows:ro
+    networks:
+      - bounty-net
+    restart: unless-stopped
+
+volumes:
+  n8n_data:
+
+networks:
+  bounty-net:
+    external: true
+    name: bounty-hunter-agent_default

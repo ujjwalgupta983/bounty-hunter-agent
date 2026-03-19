@@ -1,0 +1,88 @@
+{
+  "name": "Daily Bounty Digest",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{"field": "hours", "hoursInterval": 24}]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:8000/api/v1/dashboard/",
+        "options": {}
+      },
+      "id": "get-dashboard",
+      "name": "Get Dashboard Stats",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:8000/api/v1/bounties/top_opportunities/",
+        "options": {}
+      },
+      "id": "get-top",
+      "name": "Get Top Opportunities",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 460]
+    },
+    {
+      "parameters": {
+        "jsCode": "const stats = $('Get Dashboard Stats').first().json;\nconst top = $('Get Top Opportunities').all().slice(0, 5);\nconst lines = top.map((b, i) => `${i+1}. $${b.json.bounty_amount_usd} — ${b.json.title?.slice(0, 50)}`);\nconst msg = `🎯 *Daily Bounty Digest*\\n\\n📊 *Stats*\\nTotal: ${stats.total_bounties}\\nActive: ${stats.active_bounties}\\nSubmitted: ${stats.submitted}\\nMerged: ${stats.merged}\\nEarned: $${stats.total_earned_usd || 0}\\n\\n🏆 *Top Opportunities*\\n${lines.join('\\n')}`;\nreturn [{json: {text: msg}}];"
+      },
+      "id": "format-message",
+      "name": "Format Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 380]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {"parse_mode": "Markdown"}
+      },
+      "id": "send-telegram",
+      "name": "Send Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [900, 380],
+      "credentials": {"telegramApi": {"id": "1", "name": "Telegram Bot"}}
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {"node": "Get Dashboard Stats", "type": "main", "index": 0},
+          {"node": "Get Top Opportunities", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Get Dashboard Stats": {
+      "main": [[{"node": "Format Message", "type": "main", "index": 0}]]
+    },
+    "Get Top Opportunities": {
+      "main": [[{"node": "Format Message", "type": "main", "index": 1}]]
+    },
+    "Format Message": {
+      "main": [[{"node": "Send Telegram", "type": "main", "index": 0}]]
+    }
+  },
+  "pinData": {},
+  "settings": {"executionOrder": "v1"},
+  "staticData": null,
+  "tags": ["bounty-hunter", "digest", "telegram"],
+  "triggerCount": 0,
+  "updatedAt": "2026-03-19T00:00:00.000Z",
+  "versionId": "1"
+}
