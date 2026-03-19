@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "feat/**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run system checks
+        run: python manage.py check
+        env:
+          DJANGO_SETTINGS_MODULE: bounty_hunter.settings
+          DATABASE_URL: sqlite:///db.sqlite3
+          GITHUB_TOKEN: dummy-token-for-ci
+          ANTHROPIC_API_KEY: dummy-key-for-ci
+
+      - name: Run tests
+        run: python -m pytest tests/ -v --tb=short
+        env:
+          DJANGO_SETTINGS_MODULE: bounty_hunter.settings
+          DATABASE_URL: sqlite:///db.sqlite3
+          GITHUB_TOKEN: dummy-token-for-ci
+          ANTHROPIC_API_KEY: dummy-key-for-ci
