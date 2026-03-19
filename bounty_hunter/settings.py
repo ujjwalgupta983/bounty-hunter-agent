@@ -37,6 +37,7 @@ INSTALLED_APPS = [
     "bounty_hunter",
     "bounty_hunter.models",
     "bounty_hunter.scouts",
+    "bounty_hunter.tracker",
 ]
 
 MIDDLEWARE = [
@@ -143,6 +144,10 @@ CELERY_BEAT_SCHEDULE = {
     "analyst-rescore-stale": {
         "task": "bounty_hunter.analyst.tasks.rescore_stale_bounties",
         "schedule": 86400,  # Daily
+    },
+    "tracker-ping-stale": {
+        "task": "bounty_hunter.tracker.tasks.ping_stale_prs",
+        "schedule": 604800,  # Weekly
     },
 }
 
