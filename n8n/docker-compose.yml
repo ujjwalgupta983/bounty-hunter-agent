@@ -4,6 +4,8 @@ services:
     image: n8nio/n8n:latest
     ports:
       - "5678:5678"
+    env_file:
+      - ../config/.env
     environment:
       - N8N_HOST=localhost
       - N8N_PORT=5678
@@ -11,7 +13,6 @@ services:
       - WEBHOOK_URL=http://localhost:5678/
       - GENERIC_TIMEZONE=Asia/Kolkata
       - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-changeme-in-production}
-      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
       # Point to Django API via Docker network
       - BOUNTY_API_URL=http://web:8000
     volumes:
