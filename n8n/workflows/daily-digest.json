@@ -23,7 +23,7 @@
     },
     {
       "parameters": {
-        "url": "http://localhost:8000/api/v1/dashboard/",
+        "url": "http://web:8000/api/v1/dashboard/",
         "options": {}
       },
       "id": "get-dashboard",
@@ -37,7 +37,7 @@
     },
     {
       "parameters": {
-        "url": "http://localhost:8000/api/v1/bounties/top_opportunities/",
+        "url": "http://web:8000/api/v1/bounties/top_opportunities/",
         "options": {}
       },
       "id": "get-top",
