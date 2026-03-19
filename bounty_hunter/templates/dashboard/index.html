@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bounty Hunter — Dashboard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0d1117;
+      color: #c9d1d9;
+      min-height: 100vh;
+      padding: 24px;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 32px;
+    }
+    header h1 { font-size: 1.5rem; color: #f0f6fc; }
+    #refresh-badge {
+      font-size: 0.75rem;
+      color: #8b949e;
+      background: #161b22;
+      padding: 4px 10px;
+      border-radius: 12px;
+      border: 1px solid #30363d;
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 40px;
+    }
+    .stat-card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 20px;
+    }
+    .stat-card .label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #8b949e;
+      margin-bottom: 8px;
+    }
+    .stat-card .value {
+      font-size: 2rem;
+      font-weight: 600;
+      color: #f0f6fc;
+    }
+    .stat-card .sub {
+      font-size: 0.8rem;
+      color: #8b949e;
+      margin-top: 4px;
+    }
+    section { margin-bottom: 40px; }
+    section h2 {
+      font-size: 1rem;
+      color: #f0f6fc;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #21262d;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+    }
+    thead th {
+      text-align: left;
+      padding: 8px 12px;
+      color: #8b949e;
+      font-weight: 500;
+      border-bottom: 1px solid #21262d;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    tbody tr {
+      border-bottom: 1px solid #21262d;
+      transition: background 0.15s;
+    }
+    tbody tr:hover { background: #161b22; }
+    tbody td { padding: 10px 12px; }
+    tbody td a { color: #58a6ff; text-decoration: none; }
+    tbody td a:hover { text-decoration: underline; }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.7rem;
+      font-weight: 500;
+      text-transform: lowercase;
+    }
+    .badge-discovered { background: #1f2d3d; color: #58a6ff; }
+    .badge-evaluated  { background: #1b2a1b; color: #3fb950; }
+    .badge-targeted   { background: #2d1f1f; color: #f85149; }
+    .badge-in_progress { background: #2d231a; color: #d29922; }
+    .badge-submitted  { background: #2a1f3d; color: #a371f7; }
+    .badge-merged     { background: #1b2a1b; color: #3fb950; }
+    .badge-paid       { background: #1b2a1b; color: #3fb950; }
+    .badge-default    { background: #21262d; color: #8b949e; }
+    .empty {
+      text-align: center;
+      padding: 40px;
+      color: #8b949e;
+      font-size: 0.875rem;
+    }
+    .platform-tag {
+      font-size: 0.7rem;
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 4px;
+      padding: 2px 6px;
+      color: #8b949e;
+      text-transform: lowercase;
+    }
+    .loading { color: #8b949e; padding: 24px 0; text-align: center; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🎯 Bounty Hunter</h1>
+    <span id="refresh-badge">Auto-refresh in <span id="countdown">60</span>s</span>
+  </header>
+
+  <!-- Stats Row -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="label">Total Bounties</div>
+      <div class="value" id="stat-total">{{ stats.total }}</div>
+      <div class="sub" id="stat-platforms">{{ stats.active }} active</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Submitted</div>
+      <div class="value" id="stat-winrate">{{ stats.submitted }}</div>
+      <div class="sub" id="stat-winrate-sub">PRs submitted</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Merged</div>
+      <div class="value" id="stat-confirmed">{{ stats.merged }}</div>
+      <div class="sub" id="stat-hourly">bounties won</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Total Earned</div>
+      <div class="value" id="stat-pending">${{ stats.earned|floatformat:0 }}</div>
+      <div class="sub" id="stat-pending-count">confirmed earnings</div>
+    </div>
+  </div>
+
+  <!-- Server-rendered Top Bounties Table -->
+  <section id="server-bounties">
+    <h2>Top Bounties</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Platform</th>
+          <th>Amount</th>
+          <th>Status</th>
+          <th>ROI Score</th>
+          <th>Title</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for b in bounties %}
+        <tr>
+          <td><span class="platform-tag">{{ b.platform }}</span></td>
+          <td><strong>${{ b.bounty_amount_usd }}</strong></td>
+          <td><span class="badge badge-{{ b.status }}">{{ b.status }}</span></td>
+          <td>{% if b.evaluation %}{{ b.evaluation.roi_score|floatformat:1 }}{% else %}—{% endif %}</td>
+          <td><a href="{{ b.issue_url }}" target="_blank" rel="noopener">{{ b.title|truncatechars:60 }}</a></td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="empty">No bounties yet. Run a scout scan!</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <!-- Top Opportunities -->
+  <section>
+    <h2>Top Opportunities</h2>
+    <div id="top-opportunities-container">
+      <div class="loading">Loading…</div>
+    </div>
+  </section>
+
+  <!-- Active Bounties -->
+  <section>
+    <h2>Active Bounties</h2>
+    <div id="active-bounties-container">
+      <div class="loading">Loading…</div>
+    </div>
+  </section>
+
+  <script>
+    // -----------------------------------------------------------------------
+    // Helpers
+    // -----------------------------------------------------------------------
+    const fmt = {
+      usd: v => v != null ? '$' + parseFloat(v).toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 0}) : '—',
+      pct: v => v != null ? parseFloat(v).toFixed(1) + '%' : '—',
+    };
+
+    function badge(status) {
+      const classes = {
+        discovered: 'badge-discovered', evaluated: 'badge-evaluated',
+        targeted: 'badge-targeted', in_progress: 'badge-in_progress',
+        submitted: 'badge-submitted', merged: 'badge-merged', paid: 'badge-paid',
+      };
+      const cls = classes[status] || 'badge-default';
+      return `<span class="badge ${cls}">${status || '—'}</span>`;
+    }
+
+    function platform(p) {
+      return `<span class="platform-tag">${p || '—'}</span>`;
+    }
+
+    // -----------------------------------------------------------------------
+    // Fetch & render dashboard stats
+    // -----------------------------------------------------------------------
+    async function loadDashboard() {
+      try {
+        const resp = await fetch('/api/v1/dashboard/');
+        if (!resp.ok) throw new Error(resp.status);
+        const data = await resp.json();
+
+        const { bounties, submissions, earnings, performance } = data;
+
+        document.getElementById('stat-total').textContent =
+          (bounties && bounties.total != null) ? bounties.total : '0';
+
+        const byStatus = (bounties && bounties.by_status) || {};
+        const statusSummary = Object.entries(byStatus)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3)
+          .map(([s, c]) => `${c} ${s}`)
+          .join(' · ');
+        document.getElementById('stat-platforms').textContent = statusSummary || 'no data';
+
+        document.getElementById('stat-winrate').textContent =
+          performance ? fmt.pct(performance.win_rate) : '0%';
+        document.getElementById('stat-winrate-sub').textContent =
+          performance
+            ? `${performance.total_won || 0} of ${performance.total_attempted || 0} PRs merged`
+            : 'of submitted PRs merged';
+
+        const confirmed = earnings && earnings.total_paid;
+        document.getElementById('stat-confirmed').textContent = fmt.usd(confirmed);
+        const avgRate = earnings && earnings.avg_hourly_rate;
+        document.getElementById('stat-hourly').textContent =
+          avgRate ? `${fmt.usd(avgRate)}/hr avg` : 'no earnings yet';
+
+        const pending = earnings && earnings.total_pending;
+        document.getElementById('stat-pending').textContent = fmt.usd(pending);
+        const openPrs = submissions && submissions.total_pending;
+        document.getElementById('stat-pending-count').textContent =
+          openPrs != null ? `${openPrs} open PRs` : 'open PRs';
+
+      } catch (e) {
+        console.error('dashboard fetch failed:', e);
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // Fetch & render top opportunities
+    // -----------------------------------------------------------------------
+    async function loadTopOpportunities() {
+      const container = document.getElementById('top-opportunities-container');
+      try {
+        const resp = await fetch('/api/v1/bounties/top_opportunities/?limit=10');
+        if (!resp.ok) throw new Error(resp.status);
+        const data = await resp.json();
+        const items = Array.isArray(data) ? data : (data.results || []);
+
+        if (!items.length) {
+          container.innerHTML = '<div class="empty">No evaluated bounties yet.</div>';
+          return;
+        }
+
+        const rows = items.map(b => {
+          const ev = b.evaluation || {};
+          const roi = ev.roi_score != null ? ev.roi_score.toFixed(1) : '—';
+          const hrs = ev.estimated_hours != null ? ev.estimated_hours.toFixed(1) + 'h' : '—';
+          return `<tr>
+            <td>${platform(b.platform)}</td>
+            <td><strong>${fmt.usd(b.bounty_amount_usd)}</strong></td>
+            <td>${roi}</td>
+            <td>${hrs}</td>
+            <td><a href="${b.source_url || '#'}" target="_blank" rel="noopener">${escHtml(b.title || '')}</a></td>
+          </tr>`;
+        }).join('');
+
+        container.innerHTML = `<table>
+          <thead><tr>
+            <th>Platform</th><th>Amount</th><th>ROI</th><th>Est Hours</th><th>Title</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>`;
+      } catch (e) {
+        container.innerHTML = '<div class="empty">Could not load top opportunities.</div>';
+        console.error(e);
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // Fetch & render active bounties
+    // -----------------------------------------------------------------------
+    async function loadActiveBounties() {
+      const container = document.getElementById('active-bounties-container');
+      try {
+        const resp = await fetch('/api/v1/bounties/active/');
+        if (!resp.ok) throw new Error(resp.status);
+        const data = await resp.json();
+        const items = Array.isArray(data) ? data : (data.results || []);
+
+        if (!items.length) {
+          container.innerHTML = '<div class="empty">No active bounties right now.</div>';
+          return;
+        }
+
+        const rows = items.map(b => `<tr>
+          <td>${platform(b.platform)}</td>
+          <td><strong>${fmt.usd(b.bounty_amount_usd)}</strong></td>
+          <td>${badge(b.status)}</td>
+          <td><a href="${b.source_url || '#'}" target="_blank" rel="noopener">${escHtml(b.title || '')}</a></td>
+        </tr>`).join('');
+
+        container.innerHTML = `<table>
+          <thead><tr>
+            <th>Platform</th><th>Amount</th><th>Status</th><th>Title</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>`;
+      } catch (e) {
+        container.innerHTML = '<div class="empty">Could not load active bounties.</div>';
+        console.error(e);
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // XSS prevention
+    // -----------------------------------------------------------------------
+    function escHtml(str) {
+      const d = document.createElement('div');
+      d.appendChild(document.createTextNode(str));
+      return d.innerHTML;
+    }
+
+    // -----------------------------------------------------------------------
+    // Auto-refresh countdown
+    // -----------------------------------------------------------------------
+    let remaining = 60;
+    function tick() {
+      remaining--;
+      document.getElementById('countdown').textContent = remaining;
+      if (remaining <= 0) {
+        remaining = 60;
+        loadAll();
+      }
+    }
+
+    function loadAll() {
+      loadDashboard();
+      loadTopOpportunities();
+      loadActiveBounties();
+    }
+
+    // Kick off
+    loadAll();
+    setInterval(tick, 1000);
+  </script>
+</body>
+</html>
