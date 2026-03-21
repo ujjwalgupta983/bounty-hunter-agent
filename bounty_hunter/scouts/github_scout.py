@@ -40,6 +40,29 @@ SEARCH_QUERIES = [
     '"reward" "$" in:title state:open',
 ]
 
+# Patterns that indicate non-code noise (governance, crypto rewards, proposals)
+NOISE_PATTERNS = [
+    r'proposal\b',
+    r'paper\s*note',
+    r'payment\s*inquiry',
+    r'reward\s*(submission|program|proposal)',
+    r'contributor\s*reward',
+    r'airdrop',
+    r'token\s*(sale|distribution|reward)',
+    r'\bRIP-\d+\b',
+    r'\bDLIP-\d+\b',
+    r'consumer\s*app\s*submission',
+    r'attestation\s*inspector',
+]
+
+NOISE_LABELS = ['governance', 'proposal', 'discussion', 'question', 'announcement']
+
+CODE_SIGNALS = [
+    'bug', 'fix', 'implement', 'feature', 'test', 'refactor',
+    'error', 'crash', 'pull request', 'code', 'function', 'method',
+    'class', 'api', 'endpoint',
+]
+
 # Regex patterns to extract dollar amounts
 AMOUNT_PATTERNS = [
     r'\$\s*([\d,]+(?:\.\d{2})?)',           # $500 or $1,000 or $500.00
@@ -156,8 +179,22 @@ class GitHubScout:
         body = issue_data.get("body", "") or ""
         labels = [l.get("name", "") for l in issue_data.get("labels", [])]
 
+        # Filter noise: title pattern check
+        for pattern in NOISE_PATTERNS:
+            if re.search(pattern, title, re.IGNORECASE):
+                return "skipped"
+
+        # Filter noise: label check
+        lower_labels = [lbl.lower() for lbl in labels]
+        if any(noise in lower_labels for noise in NOISE_LABELS):
+            return "skipped"
+
         amount = self._extract_amount(title, body, labels)
         if amount is None or amount < self.min_bounty:
+            return "skipped"
+
+        # Require code signals to filter out non-engineering bounties
+        if not self._has_code_signals(title, body, labels):
             return "skipped"
 
         # Check age
@@ -217,6 +254,12 @@ class GitHubScout:
                     continue
 
         return None
+
+    def _has_code_signals(self, title: str, body: str, labels: list) -> bool:
+        """Return True if at least 2 code signals are found in combined text."""
+        combined = f"{title} {body} {' '.join(labels)}".lower()
+        matches = sum(1 for signal in CODE_SIGNALS if signal in combined)
+        return matches >= 2
 
     def _detect_language(self, labels: list) -> str:
         """Detect primary language from labels."""

@@ -44,6 +44,133 @@ class TestGitHubScoutExtractAmount:
         assert github_scout._extract_amount("$2,000,000 reward", "", []) is None
 
 
+class TestGitHubScoutNoiseFilter:
+    def test_proposal_title_skipped(self, github_scout):
+        issue = {
+            "repository_url": "https://api.github.com/repos/org/repo",
+            "number": 1,
+            "title": "Governance proposal: increase reward pool",
+            "body": "This proposal would increase the reward budget by $500 for contributors.",
+            "labels": [{"name": "bounty"}],
+            "created_at": "2026-01-01T00:00:00Z",
+        }
+        assert github_scout._process_issue(issue) == "skipped"
+
+    def test_airdrop_title_skipped(self, github_scout):
+        issue = {
+            "repository_url": "https://api.github.com/repos/org/repo",
+            "number": 2,
+            "title": "Airdrop $500 to early contributors",
+            "body": "We will airdrop tokens worth $500 to qualifying addresses.",
+            "labels": [{"name": "bounty"}],
+            "created_at": "2026-01-01T00:00:00Z",
+        }
+        assert github_scout._process_issue(issue) == "skipped"
+
+    def test_paper_note_skipped(self, github_scout):
+        issue = {
+            "repository_url": "https://api.github.com/repos/org/repo",
+            "number": 3,
+            "title": "Paper note on reward system design $100",
+            "body": "This paper note outlines a $100 reward distribution strategy.",
+            "labels": [{"name": "bounty"}],
+            "created_at": "2026-01-01T00:00:00Z",
+        }
+        assert github_scout._process_issue(issue) == "skipped"
+
+    def test_governance_label_skipped(self, github_scout):
+        issue = {
+            "repository_url": "https://api.github.com/repos/org/repo",
+            "number": 4,
+            "title": "Increase bug bounty reward $200",
+            "body": "Let's increase the bug bounty reward to $200 for all contributors.",
+            "labels": [{"name": "governance"}, {"name": "bounty"}],
+            "created_at": "2026-01-01T00:00:00Z",
+        }
+        assert github_scout._process_issue(issue) == "skipped"
+
+    def test_proposal_label_skipped(self, github_scout):
+        issue = {
+            "repository_url": "https://api.github.com/repos/org/repo",
+            "number": 5,
+            "title": "Contributor reward program $300",
+            "body": "Bug fix proposal for the auth module worth $300.",
+            "labels": [{"name": "proposal"}],
+            "created_at": "2026-01-01T00:00:00Z",
+        }
+        assert github_scout._process_issue(issue) == "skipped"
+
+    def test_rip_pattern_skipped(self, github_scout):
+        issue = {
+            "repository_url": "https://api.github.com/repos/org/repo",
+            "number": 6,
+            "title": "RIP-42: token reward distribution $500",
+            "body": "This RIP proposes a new token reward distribution mechanism worth $500.",
+            "labels": [{"name": "bounty"}],
+            "created_at": "2026-01-01T00:00:00Z",
+        }
+        assert github_scout._process_issue(issue) == "skipped"
+
+    def test_no_code_signals_skipped(self, github_scout):
+        issue = {
+            "repository_url": "https://api.github.com/repos/org/repo",
+            "number": 7,
+            "title": "Design new logo $500",
+            "body": "We are looking for a new logo design, reward $500 USD.",
+            "labels": [{"name": "bounty"}],
+            "created_at": "2026-01-01T00:00:00Z",
+        }
+        assert github_scout._process_issue(issue) == "skipped"
+
+
+@pytest.mark.django_db
+class TestGitHubScoutRealBountyPassThrough:
+    def test_real_bug_bounty_passes(self, github_scout):
+        issue = {
+            "repository_url": "https://api.github.com/repos/org/repo",
+            "number": 10,
+            "title": "Fix crash in API endpoint [BOUNTY $500]",
+            "body": "There is a bug causing a crash in the /api/users endpoint. Implement a fix and add tests.",
+            "labels": [{"name": "bug"}, {"name": "bounty"}],
+            "created_at": "2026-01-01T00:00:00Z",
+            "html_url": "https://github.com/org/repo/issues/10",
+            "comments": 0,
+        }
+        result = github_scout._process_issue(issue)
+        assert result in ("new", "updated")
+
+    def test_feature_bounty_passes(self, github_scout):
+        issue = {
+            "repository_url": "https://api.github.com/repos/org/repo",
+            "number": 11,
+            "title": "Implement CSV export feature [BOUNTY $200]",
+            "body": "We need to implement CSV export. The function should call the api endpoint and refactor the class.",
+            "labels": [{"name": "feature"}, {"name": "bounty"}],
+            "created_at": "2026-01-01T00:00:00Z",
+            "html_url": "https://github.com/org/repo/issues/11",
+            "comments": 1,
+        }
+        result = github_scout._process_issue(issue)
+        assert result in ("new", "updated")
+
+
+class TestHasCodeSignals:
+    def test_two_signals_returns_true(self, github_scout):
+        assert github_scout._has_code_signals("fix bug in auth", "", []) is True
+
+    def test_one_signal_returns_false(self, github_scout):
+        assert github_scout._has_code_signals("fix the problem", "no technical content here", []) is False
+
+    def test_signals_from_body(self, github_scout):
+        assert github_scout._has_code_signals("", "implement a new feature with tests", []) is True
+
+    def test_signals_from_labels(self, github_scout):
+        assert github_scout._has_code_signals("bounty", "", ["bug", "fix"]) is True
+
+    def test_no_signals_returns_false(self, github_scout):
+        assert github_scout._has_code_signals("logo design reward", "we want a new design", []) is False
+
+
 class TestGitHubScoutDetectLanguage:
     def test_python_label(self, github_scout):
         assert github_scout._detect_language(["python", "bug"]) == "Python"
