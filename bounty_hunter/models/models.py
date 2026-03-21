@@ -129,6 +129,7 @@ class Evaluation(models.Model):
     has_contribution_guide = models.BooleanField(default=False)
     auto_rejected = models.BooleanField(default=False)
     rejection_reason = models.CharField(max_length=255, blank=True, default="")
+    needs_reeval = models.BooleanField(default=False, help_text="AI analysis failed, using defaults")
 
     # Timestamps
     evaluated_at = models.DateTimeField(auto_now_add=True)

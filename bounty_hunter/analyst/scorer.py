@@ -124,6 +124,10 @@ class BountyAnalyst:
             has_contribution_guide=analysis.get("has_contribution_guide", False),
         )
 
+        if analysis.get("summary") == "AI analysis unavailable":
+            eval_obj.needs_reeval = True
+            eval_obj.save()
+
         bounty.status = BountyStatus.EVALUATED
         bounty.save()
 
@@ -242,11 +246,8 @@ class BountyAnalyst:
             logger.warning(f"Failed to assess repo quality: {e}")
             return 50
 
-    def _analyze_with_ai(self, bounty: Bounty) -> dict:
-        """Use AI to analyze the bounty issue and estimate difficulty."""
-        from bounty_hunter.utils.ai_client import analyze_bounty
-
-        prompt = f"""Analyze this GitHub bounty issue and provide an assessment.
+    def _build_prompt(self, bounty: Bounty) -> str:
+        return f"""Analyze this GitHub bounty issue and provide an assessment.
 
 Title: {bounty.title}
 Repository: {bounty.repo_owner}/{bounty.repo_name}
@@ -271,10 +272,72 @@ Respond in JSON format:
     "risks": ["risk1", "risk2"]
 }}"""
 
-        logger.info(
-            "analyst: calling AI provider=%s model=%s for bounty %d",
-            self.config.get("AI_PROVIDER", "anthropic"),
-            self.config.get("AI_MODEL", "default"),
-            bounty.id,
+    def _call_anthropic(self, bounty: Bounty) -> dict:
+        import anthropic
+        from bounty_hunter.utils.ai_client import _parse_json
+
+        api_key = self.config.get("ANTHROPIC_API_KEY", "")
+        if not api_key:
+            raise ValueError("ANTHROPIC_API_KEY not set")
+
+        model = self.config.get("AI_MODEL") or "claude-sonnet-4-20250514"
+        client = anthropic.Anthropic(api_key=api_key)
+        response = client.messages.create(
+            model=model,
+            max_tokens=1024,
+            messages=[{"role": "user", "content": self._build_prompt(bounty)}],
         )
-        return analyze_bounty(prompt, self.config)
+        return _parse_json(response.content[0].text)
+
+    def _call_openai(self, bounty: Bounty) -> dict:
+        from openai import OpenAI
+        from bounty_hunter.utils.ai_client import _parse_json
+
+        api_key = self.config.get("OPENAI_API_KEY", "")
+        if not api_key:
+            raise ValueError("OPENAI_API_KEY not set")
+
+        client = OpenAI(api_key=api_key)
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            max_tokens=1024,
+            messages=[{"role": "user", "content": self._build_prompt(bounty)}],
+        )
+        return _parse_json(response.choices[0].message.content)
+
+    def _analyze_with_ai(self, bounty: Bounty) -> dict:
+        """Try Anthropic, then OpenAI. Returns defaults dict on total failure."""
+        logger.info(
+            "analyst: calling AI for bounty %d (Anthropic first)", bounty.id
+        )
+
+        try:
+            return self._call_anthropic(bounty)
+        except Exception as exc:
+            err_str = str(exc).lower()
+            logger.warning("analyst: Anthropic failed for bounty %d: %s", bounty.id, exc)
+            if "credit balance" in err_str or "billing" in err_str:
+                try:
+                    from bounty_hunter.utils.notifications import notifier
+                    notifier.send("🚨 AI Credits Exhausted")
+                except Exception:
+                    pass
+
+        try:
+            logger.info("analyst: trying OpenAI fallback for bounty %d", bounty.id)
+            return self._call_openai(bounty)
+        except Exception as exc:
+            logger.warning("analyst: OpenAI fallback failed for bounty %d: %s", bounty.id, exc)
+
+        return {
+            "summary": "AI analysis unavailable",
+            "approach": "",
+            "estimated_hours": 4.0,
+            "difficulty_score": 50,
+            "has_clear_requirements": True,
+            "has_tests": False,
+            "has_ci": False,
+            "has_contribution_guide": False,
+            "required_skills": [],
+            "risks": ["AI analysis failed — manual review recommended"],
+        }
