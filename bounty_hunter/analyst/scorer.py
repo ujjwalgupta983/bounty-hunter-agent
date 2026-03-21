@@ -9,6 +9,7 @@ from decimal import Decimal
 
 import httpx
 from django.conf import settings
+from django.utils import timezone
 
 from bounty_hunter.models.models import Bounty, Evaluation, Difficulty, BountyStatus
 
@@ -84,12 +85,14 @@ class BountyAnalyst:
         competition_factor = competition / 100
         tech_factor = tech_match / 100
 
+        freshness_bonus = self._calculate_freshness_bonus(bounty)
         roi_score = min(100, (
             (float(bounty.bounty_amount_usd) / max(estimated_hours, 0.5)) *  # Base $/hr
             tech_factor *  # Tech match multiplier
             competition_factor *  # Competition multiplier
             (repo_quality / 100) *  # Quality multiplier
-            ((100 - difficulty) / 100)  # Inverse difficulty
+            ((100 - difficulty) / 100) *  # Inverse difficulty
+            freshness_bonus  # Freshness multiplier
         ) / 2)  # Normalize to 0-100 range
 
         # Map difficulty score to enum
@@ -142,7 +145,7 @@ class BountyAnalyst:
         if bounty.existing_prs > 5:
             return f"Too many existing PRs ({bounty.existing_prs})"
 
-        if bounty.competitors_count > 10:
+        if bounty.competitors_count > 15:
             return f"Too much competition ({bounty.competitors_count} competitors)"
 
         # Check if description is too vague
@@ -150,6 +153,18 @@ class BountyAnalyst:
             return "Insufficient description"
 
         return None
+
+    def _calculate_freshness_bonus(self, bounty: Bounty) -> float:
+        """Return a multiplier based on how recently the bounty was posted."""
+        age_hours = (timezone.now() - bounty.posted_at).total_seconds() / 3600 if bounty.posted_at else 0
+        if age_hours > 0 and age_hours < 6:
+            return 1.5
+        elif age_hours < 24:
+            return 1.25
+        elif age_hours < 72:
+            return 1.1
+        else:
+            return 1.0
 
     def _calculate_tech_match(self, bounty: Bounty) -> float:
         """Calculate how well our tech stack matches. Returns 0-100."""
