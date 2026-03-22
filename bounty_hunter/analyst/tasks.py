@@ -2,6 +2,8 @@
 import logging
 from celery import shared_task
 
+from django.db.models import Q
+
 from bounty_hunter.models.models import Bounty, BountyStatus
 
 logger = logging.getLogger(__name__)
@@ -43,8 +45,8 @@ def rescore_stale_bounties():
     stale_cutoff = timezone.now() - timedelta(days=7)
 
     stale = Bounty.objects.filter(
-        status=BountyStatus.EVALUATED,
-        evaluation__evaluated_at__lt=stale_cutoff,
+        Q(status=BountyStatus.EVALUATED, evaluation__evaluated_at__lt=stale_cutoff) |
+        Q(status=BountyStatus.EVALUATED, evaluation__needs_reeval=True)
     )
 
     count = 0
