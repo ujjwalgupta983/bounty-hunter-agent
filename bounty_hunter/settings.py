@@ -137,7 +137,7 @@ CELERY_WORKER_MAX_TASKS_PER_CHILD = 50
 CELERY_BEAT_SCHEDULE = {
     "scout-full-scan": {
         "task": "bounty_hunter.scouts.tasks.run_full_scan",
-        "schedule": env.int("SCOUT_SCAN_INTERVAL_HOURS", default=6) * 3600,
+        "schedule": env.int("SCOUT_SCAN_INTERVAL_HOURS", default=2) * 3600,
     },
     "tracker-check-prs": {
         "task": "bounty_hunter.tracker.tasks.check_all_prs",
