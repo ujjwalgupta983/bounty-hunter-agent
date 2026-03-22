@@ -155,16 +155,23 @@ class BountyAnalyst:
         return None
 
     def _calculate_freshness_bonus(self, bounty: Bounty) -> float:
-        """Return a multiplier based on how recently the bounty was posted."""
-        age_hours = (timezone.now() - bounty.posted_at).total_seconds() / 3600 if bounty.posted_at else 0
-        if age_hours > 0 and age_hours < 6:
+        """Return a multiplier based on how recently the bounty was posted.
+
+        <6h  → 1.5x
+        <24h → 1.25x
+        <72h → 1.1x
+        else → 1.0x (also when posted_at is unknown)
+        """
+        if not bounty.posted_at:
+            return 1.0
+        age_hours = (timezone.now() - bounty.posted_at).total_seconds() / 3600
+        if age_hours < 6:
             return 1.5
         elif age_hours < 24:
             return 1.25
         elif age_hours < 72:
             return 1.1
-        else:
-            return 1.0
+        return 1.0
 
     def _calculate_tech_match(self, bounty: Bounty) -> float:
         """Calculate how well our tech stack matches. Returns 0-100."""
