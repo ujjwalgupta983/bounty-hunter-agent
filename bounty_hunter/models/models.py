@@ -42,14 +42,6 @@ class Difficulty(models.TextChoices):
     EXPERT = "expert", "Expert"
 
 
-class PaymentMethod(models.TextChoices):
-    STRIPE = "stripe", "Stripe"
-    BANK_TRANSFER = "bank_transfer", "Bank Transfer"
-    CRYPTO = "crypto", "Crypto"
-    PAYPAL = "paypal", "PayPal"
-    UNKNOWN = "unknown", "Unknown"
-
-
 class Bounty(models.Model):
     """A bounty discovered from any platform."""
 
@@ -71,12 +63,6 @@ class Bounty(models.Model):
     currency = models.CharField(max_length=10, default="USD")
     original_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     original_currency = models.CharField(max_length=10, blank=True, default="")
-    payment_method = models.CharField(
-        max_length=20, choices=PaymentMethod.choices, default=PaymentMethod.UNKNOWN
-    )
-    india_payable = models.BooleanField(
-        default=False, help_text="True if payment_method is bank_transfer or crypto"
-    )
 
     # Metadata
     labels = models.JSONField(default=list, blank=True)
